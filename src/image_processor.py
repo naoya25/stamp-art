@@ -32,6 +32,16 @@ def calc_opacity(img_path: Path, size: int = 64) -> float:
     return float((alpha >= 128).sum()) / alpha.size
 
 
+def _is_animated(img_path: Path) -> bool:
+    """画像がアニメーション（複数フレーム）かどうかを判定。"""
+    try:
+        img = Image.open(img_path)
+        img.seek(1)
+        return True
+    except EOFError:
+        return False
+
+
 def calc_quad_colors(arr: np.ndarray) -> list[list[float]]:
     """画像配列を2×2に分割し、各象限の平均RGB (計4×3=12値) を返す。
     順序: [tl, tr, bl, br]  各要素は [R, G, B]
@@ -60,9 +70,11 @@ def process_all_stamps(stamps_dir: Path, size: int = 64) -> dict[str, dict]:
         try:
             arr = _to_rgb_array(stamp_path, size)
             opacity = calc_opacity(stamp_path, size)
+            animated = _is_animated(stamp_path)
             stamp_map[stamp_path.stem] = {
                 "colors": calc_quad_colors(arr),
                 "opacity": round(opacity, 3),
+                "animated": animated,
             }
         except Exception as e:
             print(f"  [{i}/{total}] スキップ: {stamp_path.name} ({e})")
@@ -116,16 +128,22 @@ def _save_cache(stamp_map: dict[str, dict]) -> None:
     COLOR_CACHE.write_text(json.dumps(stamp_map, ensure_ascii=False, indent=2))
 
 
-def load_color_cache(min_opacity: float = 0.0) -> Optional[dict[str, list[list[float]]]]:
-    """キャッシュを読み込み、min_opacity 未満のスタンプを除外して色情報のみ返す。"""
+def load_color_cache(
+    min_opacity: float = 0.0,
+    exclude_animated: bool = False,
+) -> Optional[dict[str, list[list[float]]]]:
+    """キャッシュを読み込み、条件に合わないスタンプを除外して色情報のみ返す。"""
     if not COLOR_CACHE.exists():
         return None
     raw = json.loads(COLOR_CACHE.read_text())
     filtered = {}
     for name, data in raw.items():
         if isinstance(data, dict):
-            if data.get("opacity", 1.0) >= min_opacity:
-                filtered[name] = data["colors"]
+            if data.get("opacity", 1.0) < min_opacity:
+                continue
+            if exclude_animated and data.get("animated", False):
+                continue
+            filtered[name] = data["colors"]
         else:
             filtered[name] = data
     return filtered

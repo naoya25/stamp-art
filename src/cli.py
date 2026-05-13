@@ -38,11 +38,20 @@ def cmd_process_stamps(args: argparse.Namespace) -> None:
 
 def cmd_generate(args: argparse.Namespace) -> None:
     """モザイクアートを生成。"""
-    color_map = load_color_cache(min_opacity=args.min_opacity)
+    color_map = load_color_cache(
+        min_opacity=args.min_opacity,
+        exclude_animated=args.no_animated,
+    )
     if not color_map:
         print("色情報がありません。先に process-stamps を実行してください。")
         sys.exit(1)
-    print(f"  不透明率 {args.min_opacity:.0%} 以上のスタンプ: {len(color_map)} 個")
+    filters = []
+    if args.min_opacity > 0:
+        filters.append(f"不透明率{args.min_opacity:.0%}以上")
+    if args.no_animated:
+        filters.append("アニメーション除外")
+    label = "、".join(filters) if filters else "フィルタなし"
+    print(f"  対象スタンプ: {len(color_map)} 個 ({label})")
 
     print(f"入力画像を {args.grid}x グリッドに分割中...")
     grid_colors, rows, cols = split_input_image(args.input, args.grid)
@@ -92,6 +101,7 @@ def main() -> None:
     p_gen.add_argument("--no-duplicate", action="store_true", help="隣接セルでの同一スタンプ使用を抑制")
     p_gen.add_argument("--slack", action="store_true", help="Slack貼り付け用の .txt も出力")
     p_gen.add_argument("--min-opacity", type=float, default=0.5, help="スタンプの最低不透明率 0.0〜1.0 (デフォルト: 0.5)")
+    p_gen.add_argument("--no-animated", action="store_true", help="アニメーションスタンプを除外")
     p_gen.set_defaults(func=cmd_generate)
 
     args = parser.parse_args()
