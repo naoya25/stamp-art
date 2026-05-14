@@ -42,16 +42,16 @@ python -m src process-stamps
 python -m src generate -i input.jpg -g 50 --slack
 ```
 
-| オプション | 説明 | デフォルト |
-|---|---|---|
-| `--input`, `-i` | 入力画像パス | (必須) |
-| `--grid`, `-g` | グリッドサイズ（長辺のマス数） | 50 |
-| `--output`, `-o` | 出力ファイルのベース名 | `output/mosaic_{grid}x{grid}` |
-| `--cell-size` | 出力画像の 1 セルのサイズ (px) | 32 |
-| `--no-duplicate` | 隣接セルで同じスタンプを使わない | off |
-| `--slack` | Slack 貼り付け用の `.txt` も出力 | off |
-| `--min-opacity` | スタンプの最低不透明率 (0.0〜1.0) | 0.5 |
-| `--no-animated` | アニメーションスタンプを除外 | off |
+| オプション       | 説明                              | デフォルト                    |
+| ---------------- | --------------------------------- | ----------------------------- |
+| `--input`, `-i`  | 入力画像パス                      | (必須)                        |
+| `--grid`, `-g`   | グリッドサイズ（長辺のマス数）    | 30                            |
+| `--output`, `-o` | 出力ファイルのベース名            | `output/{timestamp}_mosaic_{grid}x{grid}` |
+| `--cell-size`    | 出力画像の 1 セルのサイズ (px)    | 32                            |
+| `--no-duplicate` | 隣接セルで同じスタンプを使わない  | on                           |
+| `--slack`        | Slack 貼り付け用の `.txt` も出力  | on                           |
+| `--min-opacity`  | スタンプの最低不透明率 (0.0〜1.0) | 0.5                           |
+| `--no-animated`  | アニメーションスタンプを除外      | off                           |
 
 ## マッチングアルゴリズム
 

@@ -66,6 +66,43 @@ def _pick_non_duplicate(
     return names[sorted_indices[0]]
 
 
+def find_best_matches_pixel(
+    grid_pixels: np.ndarray,
+    stamp_names: list[str],
+    stamp_matrix: np.ndarray,
+    rows: int,
+    cols: int,
+    no_adjacent_duplicate: bool = False,
+) -> list[list[str]]:
+    """全画素比較で各グリッドセルに最も近いスタンプを割り当てる。
+    grid_pixels: [rows*cols, D] uint8
+    stamp_matrix: [N, D] uint8
+    """
+    grid_f = grid_pixels.astype(np.float32)
+    stamp_f = stamp_matrix.astype(np.float32)
+
+    result: list[list[str]] = []
+    idx = 0
+    for r in range(rows):
+        row_result: list[str] = []
+        for c in range(cols):
+            cell = grid_f[idx]
+            diffs = stamp_f - cell
+            distances = (diffs * diffs).sum(axis=1)
+            sorted_indices = np.argsort(distances)
+
+            if no_adjacent_duplicate:
+                chosen = _pick_non_duplicate(sorted_indices, stamp_names, row_result, result, c)
+            else:
+                chosen = stamp_names[sorted_indices[0]]
+
+            row_result.append(chosen)
+            idx += 1
+        result.append(row_result)
+
+    return result
+
+
 def compose_mosaic(
     matches: list[list[str]],
     cell_size: int = 32,
