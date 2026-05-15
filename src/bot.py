@@ -8,7 +8,7 @@ import requests
 from dotenv import load_dotenv
 
 from .image_processor import load_pixel_cache, split_input_image_pixels
-from .mosaic import find_best_matches_pixel, compose_mosaic, generate_slack_text
+from .mosaic import find_best_matches_pixel, compose_mosaic
 
 load_dotenv()
 
@@ -40,26 +40,29 @@ def _download_slack_file(url: str, suffix: str) -> str:
         return f.name
 
 
-def _generate_mosaic(input_path: str) -> tuple[str, str]:
-    """モザイク画像(.png)とSlackテキスト(.txt)を生成して一時ファイルパスを返す。"""
+def _generate_mosaic(input_path: str) -> tuple[str, list[list[str]]]:
+    """モザイク画像(.png)を生成し、(画像パス, matches) を返す。"""
     result = load_pixel_cache(min_opacity=0.5, exclude_animated=True)
     if not result:
         raise RuntimeError("キャッシュが見つかりません。process-stamps を実行してください。")
 
     names, stamp_matrix, pixel_size = result
-    grid_pixels, rows, cols = split_input_image_pixels(input_path, 30, pixel_size)
+    grid_pixels, rows, cols = split_input_image_pixels(input_path, 70, pixel_size)
     matches = find_best_matches_pixel(
         grid_pixels, names, stamp_matrix, rows, cols, no_adjacent_duplicate=True
     )
 
     img_tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     img_tmp.close()
-    txt_tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
-    txt_tmp.close()
-
     compose_mosaic(matches, cell_size=32, output_path=img_tmp.name)
-    generate_slack_text(matches, output_path=txt_tmp.name)
-    return img_tmp.name, txt_tmp.name
+    return img_tmp.name, matches
+
+
+def _build_emoji_list_text(matches: list[list[str]]) -> str:
+    """使用したemoji一覧テキストを生成する（重複なし・アルファベット順）。"""
+    unique = sorted({name for row in matches for name in row})
+    emoji_str = " ".join(f":{name}:" for name in unique)
+    return f"使用したemoji一覧\n{emoji_str}"
 
 
 def _get_upload_ts(upload_resp, channel_id: str, client) -> str | None:
@@ -97,7 +100,7 @@ def handle_mention(event, client, logger):
     suffix = "." + file_info.get("mimetype", "image/jpeg").split("/")[-1]
     print(f"[bot] 画像検出: {file_info.get('name', '(unknown)')}")
 
-    input_path = img_path = txt_path = None
+    input_path = img_path = None
     try:
         download_url = file_info.get("url_private_download") or file_info.get("url_private")
         print(f"[bot] 画像をダウンロード中... ({download_url})")
@@ -105,7 +108,7 @@ def handle_mention(event, client, logger):
         print(f"[bot] ダウンロード完了: {input_path}")
 
         print("[bot] モザイク生成中...")
-        img_path, txt_path = _generate_mosaic(input_path)
+        img_path, matches = _generate_mosaic(input_path)
         print(f"[bot] 生成完了: {img_path}")
 
         print("[bot] 画像をSlackにアップロード中...")
@@ -120,12 +123,11 @@ def handle_mention(event, client, logger):
         message_ts = _get_upload_ts(upload_resp, channel_id, client)
         print(f"[bot] message_ts: {message_ts}")
         if message_ts:
-            print(f"[bot] スレッドにテキストを送信中: thread_ts={message_ts}")
-            stamp_text = Path(txt_path).read_text()
+            print(f"[bot] スレッドにemoji一覧を送信中: thread_ts={message_ts}")
             client.chat_postMessage(
                 channel=channel_id,
                 thread_ts=message_ts,
-                text=stamp_text,
+                text=_build_emoji_list_text(matches),
             )
             print("[bot] 完了!")
         else:
@@ -135,7 +137,7 @@ def handle_mention(event, client, logger):
         logger.error(f"エラー: {e}", exc_info=True)
         print(f"[bot] エラー: {e}")
     finally:
-        for path in (input_path, img_path, txt_path):
+        for path in (input_path, img_path):
             if path:
                 Path(path).unlink(missing_ok=True)
 
